@@ -1,0 +1,27 @@
+{
+  "name": "grokking-ledis",
+  "version": "1.0.0",
+  "description": "We will attempt to build an in-memory datastore. To make things simple, let's follow the popular in-memory database Redis and try to build a stripped down version of it.",
+  "main": "server.js",
+  "dependencies": {
+    "body-parser": "^1.14.1",
+    "express": "^4.13.3",
+    "lodash": "^3.10.1",
+    "sizeof": "^1.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phongtattuan/grokking-ledis.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/phongtattuan/grokking-ledis/issues"
+  },
+  "homepage": "https://github.com/phongtattuan/grokking-ledis#readme"
+}
