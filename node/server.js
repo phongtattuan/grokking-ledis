@@ -15,11 +15,11 @@ app.use(function (req, res, next) {
 
 // error handler
 app.use(function (err, req, res, next) {
-  if(err.status !== 404) {
-    return next();
+  if(err) {
+    return res.send({'response': 'EINV'});
   }
 
-  res.send({'response': 'INVALID'});
+  return next();
 });
 
 /* Routes */
@@ -37,12 +37,17 @@ app.post('/ledis', function (req, res) {
   args = args.slice(1);
 
   var options = {
-    memoryLimit: 1024;
+    memoryLimit: 1024
   };
 
-  ledis.execute(command, args, options, function (err, response) {
-    res.json({'response': response});
-  });
+  if (command && command.toUpperCase() == 'HELP') {
+    res.send(ledis.help());
+  }
+  else {
+    ledis.execute(command, args, options, function (response) {
+      res.json({'response': response});
+    });
+  }
 });
 
 // Start server

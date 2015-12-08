@@ -2,7 +2,7 @@ var _ = require('lodash');
 var sizeof = require('sizeof');
 
 var defaultOptions = {
-  memoryLimit: 1024;
+  memoryLimit: 1024
 };
 
 var data = [];
@@ -23,11 +23,11 @@ var RESULT_CODE = {
 
 exports.RESULT_CODE = RESULT_CODE;
 
+/* General function */
 exports.setOptions = function (opts) {
   options = _.assign(defaultOptions, opts);
 };
 
-/* General function */
 exports.select = function (dbIndex) {
   currentDbIndex = dbIndex;
 };
@@ -55,7 +55,7 @@ exports.expire = function (key, seconds) {
 
   data[currentDbIndex][key].expire = Date.now() + seconds * 1000;
   setTimeout(function () {
-    export.del(key);
+    exports.del(key);
   }, seconds * 1000);
 
   return 1;
@@ -105,6 +105,9 @@ exports.set = function (key, value) {
   if (isInResultCode(value)) {
     return RESULT_CODE.INVALID;
   }
+  if (sizeof.sizeof(data) + sizeof.sizeof(value) > options.memoryLimit) {
+    return RESULT_CODE.OUT_OF_MEMORY;
+  }
 
   data[currentDbIndex][key] = {
     value: value
@@ -145,20 +148,26 @@ exports.llen = function (key) {
 exports.rpush = function (key, values) {
   var value = this.get(key);
   if (value == RESULT_CODE.INVALID) {
-    return value;
-  }
-  if(!isArray(value)) {
-    return RESULT_CODE.WRONG_KEY;
+    return RESULT_CODE.INVALID;
   }
 
   if (value == RESULT_CODE.WRONG_KEY) {
     value = [];
   }
 
+  if(!isArray(value)) {
+    return RESULT_CODE.WRONG_KEY;
+  }
+
   values.forEach(function (v) {
     value.push(v);
   })
-  this.set(key, value);
+
+  var result = this.set(key, value);
+  if (isInResultCode(result)) {
+    return result;
+  }
+
   return values.length;
 };
 
@@ -173,7 +182,7 @@ exports.lpop = function (key) {
   }
 
   if(value.length == 0) {
-    return RESULT_CODE.WRONG_KEY;
+    return null;
   }
 
   return value.shift();
@@ -190,7 +199,7 @@ exports.rpop = function (key) {
   }
 
   if(value.length == 0) {
-    return RESULT_CODE.WRONG_KEY;
+    return null;
   }
 
   return value.pop();
@@ -226,40 +235,46 @@ exports.lrange = function (key, start, stop) {
 
 /* Set function */
 exports.sadd = function (key, members) {
-  var set = this.get(key);
-  if (isInResultCode(set)) {
-    return set;
+  var value = this.get(key);
+  if (value == RESULT_CODE.INVALID) {
+    return RESULT_CODE.INVALID;
   }
 
-  if(!set) {
-    set = {};
+  if (value == RESULT_CODE.WRONG_KEY) {
+    value = {};
   }
 
-  if(!is_set(set)) {
+  if(!isSet(value)) {
     return RESULT_CODE.WRONG_KEY;
   }
 
   var num = 0;
   members.forEach(function (m) {
-    if (!set[m]) {
-      set[m] = true;
+    if (!value[m]) {
+      value[m] = true;
       num++;
     }
   });
 
-  this.set(key, set);
+  var result = this.set(key, value);
+  if (isInResultCode(result)) {
+    return result;
+  }
 
   return num;
 };
 
 exports.scard = function (key) {
-  var set = this.get(key);
-  if (isInResultCode(set)) {
-    return set;
+  var value = this.get(key);
+  if (isInResultCode(value)) {
+    return value;
+  }
+  if(!isSet(value)) {
+    return RESULT_CODE.WRONG_KEY;
   }
 
   var card = 0;
-  for(var idx in set) {
+  for(var idx in value) {
     card++;
   }
   return card;
@@ -269,6 +284,10 @@ exports.smembers = function (key) {
   var value = this.get(key);
   if (isInResultCode(value)) {
     return value;
+  }
+
+  if(!isSet(value)) {
+    return RESULT_CODE.WRONG_KEY;
   }
 
   if(!value) {
@@ -282,19 +301,19 @@ exports.smembers = function (key) {
 };
 
 exports.srem = function (key, members) {
-  var set = this.get(key);
-  if (isInResultCode(set)) {
-    return set;
+  var value = this.get(key);
+  if (isInResultCode(value)) {
+    return value;
   }
 
-  if(!is_set(set)) {
+  if(!isSet(set)) {
     return RESULT_CODE.WRONG_KEY;
   }
 
   var num = 0;
   members.forEach(function (m) {
-    if (set[m]) {
-      delete set[m];
+    if (value[m]) {
+      delete value[m];
       num++;
     }
   });
@@ -302,42 +321,46 @@ exports.srem = function (key, members) {
   return num;
 };
 
-
 exports.sinter = function (keys) {
-  do {
-    var first_key = keys.shift();
-    var tmp = this.get(first_key);
-  } while(!tmp);
-
-  tmp = JSON.parse(JSON.stringify(tmp));
-
+  var tmp = null;
   keys.forEach(function (key) {
-    var set = this.get(key);
-    if(!set) {
+    var value = this.get(key);
+    if (isInResultCode(value)) {
+      return value;
+    }
+    if(!isSet(value)) {
+      return RESULT_CODE.WRONG_KEY;
+    }
+    if(!value) {
       return [];
     }
 
-    for(var member in tmp) {
-      if(!set[member]) {
-        delete tmp[member];
+    if (!tmp) {
+      tmp = value;
+    }
+    else {
+      for(var member in tmp) {
+        if(!value[member]) {
+          delete tmp[member];
+        }
       }
     }
   }, this);
 
   var result = [];
-  for(var idx in tmp) {
-    result.push(idx);
-  }
+  for(var k in tmp) {
+    result.push(k);
+  };
 
   return result;
 };
 
 /* Snapshot function */
-exports.save = function (snapshotName, callback) {
+exports.save = function (callback) {
   var fs = require('fs');
   var filename = 'snapshot.lrdb';
-  var data = JSON.stringify(data);
-  fs.writeFile(filename, data, function (err) {
+  var dt = JSON.stringify(data);
+  fs.writeFile(filename, dt, function (err) {
     if (err) {
       console.log(err);
       return callback(RESULT_CODE.ERROR_EXECUTION);
@@ -346,16 +369,23 @@ exports.save = function (snapshotName, callback) {
   });
 };
 
-exports.restore = function (snapshotName, callback) {
+exports.restore = function (callback) {
   var fs = require('fs');
   var filename = 'snapshot.lrdb';
-  data = fs.readFileSync(filename, 'utf8', function (err, dt) {
+  fs.readFile(filename, 'utf8', function (err, dt) {
     if (err) {
       console.log(err);
       return callback(RESULT_CODE.ERROR_EXECUTION);
     }
 
-    data = JSON.parse(dt);
+    try {
+      tmp = JSON.parse(dt);
+    }
+    catch (ex) {
+      return callback(RESULT_CODE.ERROR_EXECUTION);
+    }
+
+    data = tmp;
     return callback(RESULT_CODE.OK);
   });
 };

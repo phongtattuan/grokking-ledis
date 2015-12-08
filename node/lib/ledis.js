@@ -36,7 +36,6 @@ exports.execute = function (command, args, options, done) {
   }
 
   var response = '';
-
   switch (command) {
     case COMMAND.EXPIRE.name:
       response = db.expire(args[0], args[1]);
@@ -103,13 +102,13 @@ exports.execute = function (command, args, options, done) {
       break;
 
     case COMMAND.SAVE.name:
-      db.save(function(response) {
+      return db.save(function(response) {
         return done(response);
       });
       break;
 
     case COMMAND.RESTORE.name:
-      db.restore(function(response) {
+      return db.restore(function(response) {
         return done(response);
       });
       break;
@@ -119,4 +118,33 @@ exports.execute = function (command, args, options, done) {
   }
 
   return done(response);
+}
+
+exports.help = function () {
+  return [
+    '',
+    '  Ledis (Lite Redis) datastore that supports these data structures: string, list, set\n',
+    '  Usage: ',
+    '    curl http://<domain>:<port>/ledis -X POST -H \'Content-Type: application/json\' -d \'{"command": "<command>"}\'\n',
+    '  Command:',
+    '    EXPIRE <key> <seconds>\t\t Set a timeout on a key',
+    '    TTL <key>\t\t\t\t Query the timeout of a key',
+    '    DEL <key>\t\t\t\t Delete a key',
+    '    FLUSHDB\t\t\t\t Clear all keys\n',
+    '    SET <key> <value>\t\t\t Set a string value for key',
+    '    GET <key>\t\t\t\t Get value of key\n',
+    '    LLEN <key>\t\t\t\t Return length of a list ',
+    '    RPUSH <key> <value1> [value2...]\t Append 1 or more values to the list',
+    '    LPOP <key>\t\t\t\t Remove and return the first item of the list ',
+    '    RPOP <key>\t\t\t\t Remove and return the last item of the list ',
+    '    LRANGE <key> <start> <stop>\t\t Return a range of element from the list (one-based inclusive)\n',
+    '    SADD <key> <value1> [value2...]\t Add values to set',
+    '    SCARD <key>\t\t\t\t Get number of elements of the set',
+    '    SMEMBERS <key>\t\t\t Return array of all members of set ',
+    '    SREM <key> <value1> [value2...]\t Remove values from set',
+    '    SINTER [key1] [key2] [key3] ...\t Intersection among all set\n',
+    '    SAVE\t\t\t\t Save a snapshot',
+    '    RESTORE\t\t\t\t Restore from the last snapshot\n',
+    ''
+  ].join('\n');
 }
